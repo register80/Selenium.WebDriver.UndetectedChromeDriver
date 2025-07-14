@@ -115,26 +115,54 @@ namespace Selenium.WebDriver.UndetectedChromeDriver
                                            : target[key]
                                        })
                                    });
-
                         " }
                     });
-
             }
 
-            var userAgentString = (string)this.ExecuteScript("return navigator.userAgent");
-
-
+            // 모바일 User-Agent 및 디바이스 메트릭스 적용 (Chrome 138)
+            string mobileUA = "Mozilla/5.0 (Linux; Android 15; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.63 Mobile Safari/537.36";
             BaseDriver.ExecuteCdpCommand("Network.setUserAgentOverride",
-                new Dictionary<string, object>()
+                new Dictionary<string, object>
                 {
-                        {"userAgent", userAgentString.Replace("Headless","")}
+                    {"userAgent", mobileUA},
+                    {"platform", "Android"},
+                    {"acceptLanguage", "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"},
+                    {"userAgentMetadata", new Dictionary<string, object>
+                        {
+                            {"platform", "Android"},
+                            {"mobile", true},
+                            {"brands", new[]{ new Dictionary<string,object>{{"brand","Google Chrome"},{"version","138"}} } }
+                        }
+                    }
                 }
             );
 
+            BaseDriver.ExecuteCdpCommand("Emulation.setDeviceMetricsOverride",
+                new Dictionary<string, object>
+                {
+                    {"width", 360},
+                    {"height", 800},
+                    {"deviceScaleFactor", 3},
+                    {"mobile", true}
+                }
+            );
 
-
-
-
+            // navigator.platform, userAgent, maxTouchPoints, userAgentData 등 모바일로 위장
+            BaseDriver.ExecuteCdpCommand("Page.addScriptToEvaluateOnNewDocument",
+                new Dictionary<string, object>
+                {
+                    {"source", @"
+                        Object.defineProperty(navigator, 'platform', {get: () => 'Linux armv8l'});
+                        Object.defineProperty(navigator, 'userAgent', {get: () => '" + mobileUA + @"'});
+                        Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 5});
+                        Object.defineProperty(navigator, 'userAgentData', {get: () => ({
+                            platform: 'Android',
+                            mobile: true,
+                            brands: [{brand: 'Google Chrome', version: '138'}]
+                        })});
+                    "}
+                }
+            );
 
             var scriptResult = this.ExecuteScript(@"
                let objectToInspect = window,
@@ -148,7 +176,6 @@ namespace Selenium.WebDriver.UndetectedChromeDriver
             if (scriptResult != null && ((ReadOnlyCollection<object>)scriptResult).Count > 0)
             {
                 BaseDriver.ExecuteCdpCommand("Page.addScriptToEvaluateOnNewDocument",
-
                     new Dictionary<string, object>()
                     {
                         {"source", @" 
@@ -161,9 +188,7 @@ namespace Selenium.WebDriver.UndetectedChromeDriver
                                                 &&delete window[p]&&console.log('removed',p))
                     " }
                     }
-
-                    );
-
+                );
             }
 
             base.GoTo(URL);
